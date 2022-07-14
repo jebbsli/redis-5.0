@@ -67,9 +67,11 @@ struct __attribute__ ((__packed__)) sdshdr32 {
     unsigned char flags; /* 3 lsb of type, 5 unused bits */
     char buf[];
 };
+
+// @这里，__attribute__ ((__packed__)) 的作用是告诉编译器，在编译该结构体的时候，不要使用字节对齐的方式，而是采用紧凑的方式分配内存
 struct __attribute__ ((__packed__)) sdshdr64 {
     uint64_t len; /* used @已使用空间长度 */
-    uint64_t alloc; /* excluding the header and null terminator @分配的空间总长度 */
+    uint64_t alloc; /* excluding the header and null terminator @字符串数组分配的空间总长度，不包括结构体头和\0结束字符 */
     unsigned char flags; /* 3 lsb of type, 5 unused bits @SDS类型，目前只使用到低三位 */
     char buf[]; /* @实际保存字符串的字符数组 */
 };
@@ -85,12 +87,15 @@ struct __attribute__ ((__packed__)) sdshdr64 {
 #define SDS_HDR(T,s) ((struct sdshdr##T *)((s)-(sizeof(struct sdshdr##T))))
 #define SDS_TYPE_5_LEN(f) ((f)>>SDS_TYPE_BITS)
 
+// @返回sds字符串长度
 static inline size_t sdslen(const sds s) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
             return SDS_TYPE_5_LEN(flags);
         case SDS_TYPE_8:
+            /* struct sdshdr8 *sh = (void*)(s - sizeof(struct sdshdr8));
+               return sh->len; @这两行代码等效于下面宏展开之后的代码 */
             return SDS_HDR(8,s)->len;
         case SDS_TYPE_16:
             return SDS_HDR(16,s)->len;

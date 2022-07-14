@@ -41,6 +41,7 @@
 
 const char *SDS_NOINIT = "SDS_NOINIT";
 
+// @根据SDS类型返回该类型的结构体头长度
 static inline int sdsHdrSize(char type) {
     switch(type&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
@@ -57,6 +58,7 @@ static inline int sdsHdrSize(char type) {
     return 0;
 }
 
+// @根据字符串长度返回，返回该字符串的SDS类型
 static inline char sdsReqType(size_t string_size) {
     if (string_size < 1<<5)
         return SDS_TYPE_5;
@@ -85,26 +87,33 @@ static inline char sdsReqType(size_t string_size) {
  *
  * You can print the string with printf() as there is an implicit \0 at the
  * end of the string. However the string is binary safe and can contain
- * \0 characters in the middle, as the length is stored in the sds header. */
+ * \0 characters in the middle, as the length is stored in the sds header.
+ * @根据传入字符串以及该字符串长度，创建一个新的sds字符串 */
 sds sdsnewlen(const void *init, size_t initlen) {
-    void *sh;
-    sds s;
-    char type = sdsReqType(initlen);
-    /* Empty strings are usually created in order to append. Use type 8
-     * since type 5 is not good at this. */
-    if (type == SDS_TYPE_5 && initlen == 0) type = SDS_TYPE_8;
-    int hdrlen = sdsHdrSize(type);
-    unsigned char *fp; /* flags pointer. */
+    void *sh; // 指向SDS结构体的指针
+    sds s; // SDS类型变量，即char*字符数组
+    char type = sdsReqType(initlen); // 获取字符串的SDS类型
 
-    assert(hdrlen+initlen+1 > initlen); /* Catch size_t overflow */
-    sh = s_malloc(hdrlen+initlen+1);
-    if (init==SDS_NOINIT)
+    /* Empty strings are usually created in order to append. Use type 8
+     * since type 5 is not good at this. @如果是类型5，并且是空字符串，则默认为类型8 */
+    if (type == SDS_TYPE_5 && initlen == 0) type = SDS_TYPE_8;
+
+    int hdrlen = sdsHdrSize(type);  // @计算SDS结构体头长度
+    unsigned char *fp; /* flags pointer. @指向flags变量的指针 */
+
+    assert(hdrlen+initlen+1 > initlen); /* Catch size_t overflow @SDS结构体头的长度+字符串长度+1必须大于字符串长度（感觉这个判断有点多余） */
+
+    sh = s_malloc(hdrlen+initlen+1); // @分配总共需要的内存空间，并将首地址保存在sh变量
+    if (init==SDS_NOINIT) // @判断是否是有效字符串，不是则赋值NULL
         init = NULL;
-    else if (!init)
+    else if (!init) // @是有效字符串，则初始化空间为0，为后续赋值做准备
         memset(sh, 0, hdrlen+initlen+1);
-    if (sh == NULL) return NULL;
-    s = (char*)sh+hdrlen;
-    fp = ((unsigned char*)s)-1;
+
+    if (sh == NULL) return NULL; // @判断申请内存空间是否成功
+    s = (char*)sh+hdrlen; // @将s指向字符数组，即buf
+    fp = ((unsigned char*)s)-1; // @将fp指向flags
+
+    // @SDS按类型填充元数据，即SDS结构体头字段
     switch(type) {
         case SDS_TYPE_5: {
             *fp = type | (initlen << SDS_TYPE_BITS);
@@ -140,8 +149,8 @@ sds sdsnewlen(const void *init, size_t initlen) {
         }
     }
     if (initlen && init)
-        memcpy(s, init, initlen);
-    s[initlen] = '\0';
+        memcpy(s, init, initlen); // @将字符串拷贝到新申请的内存空间中
+    s[initlen] = '\0'; // @在字符数组结尾赋值\0
     return s;
 }
 
@@ -398,12 +407,19 @@ sds sdsgrowzero(sds s, size_t len) {
  * After the call, the passed sds string is no longer valid and all the
  * references must be substituted with the new pointer returned by the call. */
 sds sdscatlen(sds s, const void *t, size_t len) {
+    // @获取目标字符串s的当前长度
     size_t curlen = sdslen(s);
 
+    // @根据要追加的长度len和目标字符串s的现有长度，判断是否需要新增空间
     s = sdsMakeRoomFor(s,len);
     if (s == NULL) return NULL;
+
+    // @将源字符串t中len长度的数据拷贝到目标字符串结尾
     memcpy(s+curlen, t, len);
+
+    // @设置目标字符串的最新长度，拷贝前的长度curlen加上拷贝的长度len
     sdssetlen(s, curlen+len);
+    // @拷贝完成后，在目标字符串结尾加上\0
     s[curlen+len] = '\0';
     return s;
 }
